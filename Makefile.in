@@ -1,0 +1,307 @@
+#
+# APRSC
+#
+
+# -------------------------------------------------------------------- #
+# target paths
+
+VARRUN=		/opt/aprsc/logs	# directory for aprsc.state and pid-file
+VARLOG=		/opt/aprsc/logs	# directory for direct logfiles
+CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
+SBINDIR=	@sbindir@	# installation path for programs
+MANDIR=		@mandir@	# installation path for manual pages
+SBINDIR=	/opt/aprsc/sbin
+CFGFILE=	/opt/aprsc/etc/aprsc.conf
+
+# generate version strings
+VERSION:=$(shell cat VERSION)
+GIT_CMD:=$(shell which git)
+GITVERSION:=$(shell if test -x $(GIT_CMD) -a \( -d .git -o -d ../.git \) ; then \
+		($(GIT_CMD) describe --long --dirty=M || $(GIT_CMD) describe --long)| sed -e 's/^.*-//' | tee GITVERSION; \
+	else \
+		(if test -f GITVERSION; then \
+			cat GITVERSION; \
+		else \
+			(pwd | sed -e 's/.*-//' | sed -e 's/\/.*//' | egrep '^[a-f0-9]+$$' | tee GITVERSION ) \
+		fi); \
+	fi)
+SRCVERSION:=$(GITVERSION)
+DATE:=$(shell TZ=UTC date +"%Y %B %d")
+RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")
+BUILD_TIME:=$(shell TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")
+LINUXCODENAME:=$(shell lsb_release -sc 2>/dev/null || true)
+BUILD_USER:=$(shell whoami)
+
+# -------------------------------------------------------------------- #
+
+# strip extra whitespace from paths
+VARRUN:=$(strip $(VARRUN))
+VARLOG:=$(strip $(VARLOG))
+CFGFILE:=$(strip $(CFGFILE))
+SBINDIR:=$(strip $(SBINDIR))
+MANDIR:=$(strip $(MANDIR))
+
+srcdir = @srcdir@
+VPATH = @srcdir@
+@SET_MAKE@
+
+# Compiler and flags
+CC=		@CC@
+PROF=
+CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ $(PROF) $(DEFS)
+
+# On solaris, should use -D_REENTRANT  CFLAGS
+
+# Linker and flags
+LD=		@LD@
+LDFLAGS=	@LDFLAGS@ $(PROF)
+
+INSTALL=	$(srcdir)/install-sh
+INSTALL_PROGRAM=$(INSTALL)  -m 755
+INSTALL_DATA=	$(INSTALL)  -m 644
+INSTALL_DIR=$(INSTALL)  -m 755 -d
+
+LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@ @LIBCAP@ @LIBZ@ @LIBCRYPTO@ @LIBSSL@
+
+#LIBS += -L/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/lib
+#CFLAGS += -I/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/include
+
+
+# Linux:
+# -lpthread
+# Solaris 2.8:
+# -lpthread -lxnet -lsocket -lnss -lrt
+# Solaris 2.6:
+# -lpthread -lxnet -lsocket -lnsl -lposix4 -lresolv
+
+# -------------------------------------------------------------------- #
+
+DEFS=	-Wall -Wstrict-prototypes -D_REENTRANT
+
+
+# -------------------------------------------------------------------- #
+
+.PHONY: 	all clean distclean valgrind profile
+
+all: aprsc aprsc.8
+
+
+### "valgrind" is not for running the valgrind, rather for compiling
+### the software so that internal cellmalloc et.al. are disabled.
+
+valgrind:
+	@echo "Did you do 'make clean' before 'make valgrind' ?"
+	make all CFLAGS="${CFLAGS} -D_FOR_VALGRIND_"
+
+profile:
+	@echo "Did you do 'make clean' before 'make profile' ?"
+	make all PROF=-pg
+
+
+# -------------------------------------------------------------------- #
+
+DATAMODE = 0644
+DATAINSTALL = install --preserve-timestamps -m $(DATAMODE)
+
+WEBFILES = \
+	src/web/aprsc.css src/web/aprsc.js src/web/aprsc-graph.js \
+	src/web/strings-en.json \
+	src/web/strings-fi.json \
+	src/web/index.html \
+	src/web/favicon.ico \
+	src/web/aprsc-logo4.png \
+	src/web/aprsc-logo4@2x.png \
+	src/web/aprsc-joulukissa.jpg \
+ 	src/web/excanvas.min.js \
+	src/web/angular.min.js \
+	src/web/angular-translate.min.js \
+	src/web/angular-translate-loader-url.min.js \
+	src/web/ngDialog.min.js \
+	src/web/ngDialog.min.css \
+	src/web/ngDialog-theme-plain.min.css \
+ 	src/web/jquery.min.js \
+	src/web/jquery.flot.min.js \
+	src/web/jquery.flot.time.min.js \
+	src/web/jquery.flot.selection.min.js \
+	src/web/jquery.flot.resize.min.js \
+	src/web/bootstrap/css/bootstrap.min.css \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.eot \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.ttf \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.woff \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.woff2
+ 	
+testinstall:
+	mkdir -p ../tests/web ../tests/data ../tests/logs
+	cp -p $(subst src/,,$(WEBFILES)) ../tests/web/
+
+# -------------------------------------------------------------------- #
+
+.PHONY:	version_data.h
+version_data.h:
+	@echo "Generating version_data.h"
+	@echo "/* generated automatically by Makefile - mark your branch in version_branch.h */" > version_data.h.new
+	@echo "#ifndef VERSIONDATA_H" >> version_data.h.new
+	@echo "#define VERSIONDATA_H" >> version_data.h.new
+	@echo "#define VERSION \"$(VERSION)\"" >> version_data.h.new
+	@echo "#define SRCVERSION \"$(SRCVERSION)\"" >> version_data.h.new
+	@echo "#define BUILD_TIME \"$(BUILD_TIME)\"" >> version_data.h.new
+	@echo "#define BUILD_USER \"$(BUILD_USER)\"" >> version_data.h.new
+	@echo "#endif" >> version_data.h.new
+	@if test ! -f /version_data.h; then cp version_data.h.new version_data.h; fi
+	@diff version_data.h.new version_data.h > /dev/null || mv version_data.h.new version_data.h
+	@rm -f version_data.h.new
+
+# -------------------------------------------------------------------- #
+
+OBJS = aprsc.o accept.o worker.o errno.o \
+	login.o incoming.o dupecheck.o outgoing.o \
+	clientlist.o client_heard.o \
+	parse_aprs.o parse_qc.o \
+	messaging.o \
+	config.o netlib.o xpoll.o acl.o \
+	cfgfile.o passcode.o uplink.o \
+	rwlock.o hmalloc.o hlog.o \
+	keyhash.o \
+	filter.o cellmalloc.o historydb.o \
+	counterdata.o status.o cJSON.o \
+	http.o ssl.o sctp.o version.o \
+	@LIBOBJS@
+
+clean:
+	rm -f *.o *~ */*~ ../*~ core *.d
+	rm -f ../svn-commit* svn-commit*
+
+distclean: clean
+	rm -f aprsc
+	rm -f aprsc.8
+	rm -f ac-hdrs.h Makefile config.log config.status
+	rm -rf autom4te.cache
+	rm -f build-stamp configure-stamp
+	rm -rf ../build/build-out ../build/build-down
+	rm -rf debian/aprsc debian/*.debhelper debian/*.log \
+		debian/aprsc.substvars debian/changelog
+	rm -f ../*.deb ../*.changes
+	rm -f ../tests/data/* ../tests/logs/*
+
+aprsc: $(OBJS)
+	$(LD) $(LDFLAGS) -g -o aprsc $(OBJS) $(LIBS)
+
+%.o: %.c VERSION Makefile
+	$(CC) $(CFLAGS) -c $<
+	@$(CC) -MM $(CFLAGS) $< > $(@:.o=.d)
+
+version.o: version_data.h
+
+aprsc.8 : % : %.in VERSION Makefile
+	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SRCVERSION) - $(DATE)}g;	\
+	          s{\@VARRUN\@}{$(VARRUN)}g;			\
+	          s{\@VARLOG\@}{$(VARLOG)}g;			\
+	          s{\@CFGFILE\@}{$(CFGFILE)}g;			\
+		  print;"					\
+	 < $< > $@
+
+
+# -------------------------------------------------------------------- #
+
+# target paths
+#VARRUN=	/var/run	# directory for pid-file
+#VARLOG=	/var/log/aprsc	# directory for direct logfiles
+#CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
+#SBINDIR=	@sbindir@# installation path for programs
+#MANDIR=	@mandir@	# installation path for manual pages
+#DATAROOTDIR=	@datarootdir@
+
+.PHONY:	install install-deb
+install: all
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/etc
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/logs
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/data
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/web
+	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
+	$(INSTALL_PROGRAM) aprsc_munin $(DESTDIR)$(SBINDIR)/aprsc_munin
+	$(INSTALL_DATA) aprsc.8 $(DESTDIR)$(MANDIR)/man8/aprsc.8
+	$(INSTALL_DATA) $(subst src/,,$(WEBFILES)) $(DESTDIR)/opt/aprsc/web
+	if [ ! -f  $(DESTDIR)$(CFGFILE) ] ; then \
+		$(INSTALL_DATA) aprsc.conf $(DESTDIR)$(CFGFILE) ; \
+	else true ; fi
+
+# -------------------------------------------------------------------- #
+
+DISTVERSION:=aprsc-$(VERSION).$(SRCVERSION)
+DISTTARGET:=../../$(DISTVERSION)
+RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/aprsc-//')
+.PHONY: dist rpm/aprsc.spec
+dist: rpm/aprsc.spec
+	@# Special for the source maintainer only..
+	@if [ ! -z "$(shell echo -n $(SVNVERSION) | tr -d 0-9)" ]; then	    \
+	  echo "Mixed or modified tree ($(SVNVERSION)), ARE YOU SURE ??." ; \
+	  echo -n "Y/^C ? "; read var ;					    \
+	fi
+	if [ ! -d $(DISTTARGET) ] ; then	\
+		mkdir $(DISTTARGET) ;		\
+	fi
+	tar cf - --exclude=windows --exclude-vcs --exclude=.svn --exclude="*.log*" \
+		--exclude=tools --exclude="*.pid" \
+		--exclude="*~" \
+		--exclude="build" --exclude "HOME.md" \
+		--exclude="javaprssrvr" --exclude="javaprssrvr4" \
+		--exclude=build-out --exclude=build-down \
+		.. | (cd $(DISTTARGET) ; tar xf -)
+	make -C $(DISTTARGET)/src distclean
+	cd ../.. && 	\
+	tar czf $(DISTVERSION).tar.gz $(DISTVERSION)
+
+dist-upload: dist
+	scp ../../$(DISTVERSION).tar.gz aprsc-dist:/data/www/hes/html/aprsc/down/
+	ssh aprsc-dist "cd /data/www/hes/html/aprsc/down/ && rm aprsc-latest.tar.gz; ln -s $(DISTVERSION).tar.gz aprsc-latest.tar.gz"
+
+rpm/aprsc.spec: rpm/aprsc.spec.in
+	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
+		  s{\@DATE0\@}{$(DATE0)}g;		\
+		  print;"				\
+		  < rpm/aprsc.spec.in	\
+		  > rpm/aprsc.spec
+
+# -------------------------------------------------------------------- #
+
+.PHONY: make-deb make-rpm
+
+make-deb:
+	if [ -f debian/changelog.release ] ; then \
+	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
+		  \$$ver =~ s/^.*?-//;	\
+		  \$$cname = '$(LINUXCODENAME)';	\
+		  \$$cname =~ s/\///g;		\
+		  \$$ver .= \"+\$$cname\" . '1';	\
+		  s{\@VERSION\@}{\$$ver}g;	\
+		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
+		  print;"			\
+		  < debian/changelog.release	\
+		  > debian/changelog ; \
+	fi
+	nice dpkg-buildpackage -b -us -uc -rfakeroot -j2
+
+make-rpm: # actually just a reminder of how to do it..
+	rpmbuild --target i686 -ta $(DISTVERSION).tar.gz 
+
+# -------------------------------------------------------------------- #
+
+MARKDOWN=perl ../tools/Markdown.pl
+WEBDOCS=/data/www/hes/html/aprsc
+DOCS=README.md INSTALLING.md BUILDING.md CONFIGURATION.md DEBUGGING.md \
+	HOME.md CONTRIBUTING.md MONITORING.md TIPS.md WINDOWS.md \
+	TRANSLATING.md
+DESTDOCS=$(addprefix $(WEBDOCS)/,$(addsuffix .html,$(basename $(DOCS))))
+SRCDOCS=$(addprefix ../doc/,$(DOCS))
+install-webdoc: $(DESTDOCS)
+$(DESTDOCS): $(SRCDOCS) ../doc/web-header.html ../doc/web-footer.html
+	cp ../doc/web-header.html $@
+	$(MARKDOWN) < $(addprefix ../doc/,$(basename $(notdir $@))).md >> $@
+	cat ../doc/web-footer.html >> $@
+
+# -------------------------------------------------------------------- #
+
+
+# include object depencies if available
+@ifGNUmake@ -include $(OBJS:.o=.d)
+

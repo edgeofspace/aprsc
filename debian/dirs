@@ -1,0 +1,14 @@
+opt/
+opt/aprsc/
+opt/aprsc/etc
+opt/aprsc/sbin
+opt/aprsc/data
+opt/aprsc/web
+opt/aprsc/logs
+opt/aprsc/lib
+opt/aprsc/lib64
+opt/aprsc/usr
+opt/aprsc/usr/lib
+opt/aprsc/usr/lib64
+opt/aprsc/dev
+etc/apparmor.d

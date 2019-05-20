@@ -1,0 +1,152 @@
+Summary: Hamradio APRS core server
+Name: aprsc
+Version: @VERSION@
+Release: 1
+License: BSD
+Group: Hamradio
+URL: https://groups.google.com/forum/#!forum/aprsc
+Source0: %{name}-%{version}.tar.gz
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
+
+%description
+
+%prep
+echo begin prep
+%setup -q
+echo end prep
+
+%build
+#aclocal
+#autoheader
+#autoconf
+HARDWARE=`uname -m`
+
+cd src
+
+./configure --sbindir=/usr/sbin --sysconfdir=/etc \
+	--localstatedir=/var --mandir=/usr/share/man \
+	--enable-static-libevent=/usr/local/lib/libevent.a \
+	--with-openssl \
+	CC="gcc" \
+	CFLAGS="-g ${RPM_OPT_FLAGS}" \
+	AFLAGS="-g ${RPM_OPT_FLAGS} --noexecstack" \
+	LDFLAGS="-g ${RPM_OPT_FLAGS} -z noexecstack"
+touch configure-stamp
+
+make
+
+rm -f build-stamp configure-stamp
+
+
+%install
+rm -rf $RPM_BUILD_ROOT
+
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc/etc
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc/sbin
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc/data
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc/web
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc/logs
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc/dev
+mkdir -p $RPM_BUILD_ROOT/etc/init.d
+mkdir -p $RPM_BUILD_ROOT/etc/sysconfig
+mkdir -p $RPM_BUILD_ROOT%{_mandir}/man8
+
+cd src
+
+make install DESTDIR=$RPM_BUILD_ROOT
+
+install -m 755 rpm/aprsc.init    $RPM_BUILD_ROOT/etc/init.d/aprsc
+install -m 755 debian/aprsc.default $RPM_BUILD_ROOT/etc/sysconfig/aprsc
+
+gzip -9 $RPM_BUILD_ROOT/%{_mandir}/man8/*
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+
+%files
+%defattr(-,root,root,-)
+%doc src/LICENSE
+%doc doc/README.md doc/INSTALLING.md doc/CONFIGURATION.md doc/DEBUGGING.md
+%doc doc/MONITORING.md doc/CONTRIBUTING.md doc/BUILDING.md
+%doc doc/TODO
+%doc %{_mandir}/man8/aprsc.8.gz
+%config(noreplace) /opt/aprsc/etc/aprsc.conf
+%config(noreplace) /etc/init.d/aprsc
+%config(noreplace) /etc/sysconfig/aprsc
+/opt/aprsc/sbin/aprsc
+/opt/aprsc/sbin/aprsc_munin
+/opt/aprsc/web/*
+%dir /opt/aprsc/logs
+%dir /opt/aprsc/data
+
+%post
+
+# functions
+
+setup_aprsc_user() {
+        if ! getent group aprsc >/dev/null; then
+        	echo "Creating user group: 'aprsc'"
+                groupadd --system aprsc
+        fi
+        if ! getent passwd aprsc >/dev/null; then
+        	echo "Creating user account: 'aprsc'"
+                useradd --system --no-create-home --home /var/run/aprsc --shell /sbin/nologin -g aprsc aprsc
+        fi
+}
+
+fix_permissions() {
+	chown aprsc:aprsc /opt/aprsc/logs /opt/aprsc/data
+	setcap cap_net_bind_service=+eip /opt/aprsc/sbin/aprsc || true
+}
+
+setup_chroot_devices() {
+	( cd /opt/aprsc/dev && cp -a /dev/urandom /dev/random /dev/null /dev/zero . )
+}
+
+apparmor_config() {
+	# Reload AppArmor profile
+	APP_PROFILE="/etc/apparmor.d/opt.aprsc.sbin.aprsc"
+	if [ -f "$APP_PROFILE" ] && aa-status --enabled 2>/dev/null; then
+		echo "Installing apparmor profile..."
+		apparmor_parser -r -T -W "$APP_PROFILE" || true
+	fi
+}
+
+munin_config() {
+	if [ -d "/etc/munin/plugins" ]; then
+		echo "Setting up munin plugin..."
+		( cd /etc/munin/plugins && /opt/aprsc/sbin/aprsc_munin makelinks )
+	fi
+}
+
+init_chkconf() {
+	chkconfig aprsc on
+}
+
+create_lib_mountpoints() {
+	if [ -h /opt/aprsc/lib64 ]; then
+		rm /opt/aprsc/lib64
+	fi
+	for i in lib lib64 usr usr/lib usr/lib64; do
+		if [ ! -d /opt/aprsc/$i ]; then
+			mkdir /opt/aprsc/$i
+		fi
+	done
+}
+
+# main
+
+setup_aprsc_user
+fix_permissions
+setup_chroot_devices
+#apparmor_config
+munin_config
+create_lib_mountpoints
+init_chkconf
+
+
+%changelog
+* Sat Jan 12 2008 Matti Aarnio - OH2MQK - KP20NG <oh2mqk@sral.fi> - 
+- RPM framework added

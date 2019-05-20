@@ -1,0 +1,82 @@
+#!/bin/sh -e
+
+action="$1"
+oldversion="$2"
+
+. /usr/share/debconf/confmodule
+db_version 2.0
+
+umask 022
+
+if [ "$action" != configure ]
+	then
+	exit 0
+fi
+
+# functions
+
+setup_aprsc_user() {
+        if ! getent passwd aprsc >/dev/null; then
+        	echo "Creating user account: 'aprsc'"
+                adduser --quiet --system --no-create-home --home /var/run/aprsc --shell /usr/sbin/nologin --group aprsc
+        fi
+}
+
+fix_permissions() {
+	chown aprsc:aprsc /opt/aprsc/logs /opt/aprsc/data
+	setcap cap_net_bind_service=+eip /opt/aprsc/sbin/aprsc || true
+}
+
+setup_chroot_devices() {
+	( cd /opt/aprsc/dev && cp -a /dev/urandom /dev/random /dev/null /dev/zero . )
+}
+
+apparmor_config() {
+	# Reload AppArmor profile
+	APP_PROFILE="/etc/apparmor.d/opt.aprsc.sbin.aprsc"
+	if [ -f "$APP_PROFILE" ] && aa-status --enabled 2>/dev/null; then
+		echo "Installing apparmor profile..."
+		apparmor_parser -r -T -W "$APP_PROFILE" || true
+	fi
+}
+
+munin_config() {
+	if [ -d "/etc/munin/plugins" ]; then
+		echo "Setting up munin plugin..."
+		( cd /etc/munin/plugins && /opt/aprsc/sbin/aprsc_munin makelinks )
+	fi
+}
+
+# main
+
+setup_aprsc_user
+fix_permissions
+setup_chroot_devices
+apparmor_config
+munin_config
+
+# Finally, do a start or restart
+if [ -x "/etc/init.d/aprsc" ]; then
+	# set up links
+	update-rc.d aprsc defaults >/dev/null
+	# start or upgrade
+	if [ -n "$2" ]; then
+		# Upgrading. If previous version is new enough, perform
+		# a live upgrade.
+		if dpkg --compare-versions "$2" gt "1.6.4"; then
+			_dh_action=liveupgrade
+		else
+			_dh_action=restart
+		fi
+	else
+		_dh_action=start
+	fi
+	if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+		invoke-rc.d aprsc $_dh_action || exit $?
+	else
+		/etc/init.d/aprsc $_dh_action || exit $?
+	fi
+fi
+
+exit 0
+

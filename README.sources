@@ -1,0 +1,167 @@
+
+This file attempts to describe the contents of the aprsc
+source tree. When adding files, please describe them here. Thanks!
+
+aprsc.c
+	Contains a command line parser, the main signal handler, and
+	a small main loop, which only calls time() to update a global
+	"now" variable (to reduce the amount of system calls). At startup
+	it reads the configuration and starts up the accept thread,
+	which in turns starts worker threads. It can also trigger
+	reconfiguring and log reopening on when signals are received,
+	and start a graceful shutdown.
+
+accept.c
+	Contains the accept thread, which listens on the configured TCP/UDP
+	sockets, accepts (or denies) new connections, and passes them
+	to the worker thread with least existing connections. When
+	a lot of connections arrive quickly, multiple connections
+	are transferred to a worker in a single transaction to reduce
+	lock congestion.
+
+worker.c
+worker.h
+	Contains the body of the worker thread. worker.h defines most
+	of the interesting data structures and is a good place to
+	start digging.
+	
+	Worker threads process incoming and outgoing data. There are 1..n
+	workers, where N is 1 to 4 (more really doesn't make sense at this
+	point, and 1 is probably good too). Incoming data is parsed,
+	preprocessed, and passed on to the dupecheck thread which
+	marks duplicate packets as such. Dupecheck returns the packets to
+	the workers which then pass on them to the right clients.
+
+login.c
+	Contains a login_handler() function which is called by the
+	worker thread to process an incoming "user" command from
+	a new client.
+
+uplink.c
+	The uplink management thread takes care of connecting to
+	remote upstream servers as needed. It also contains the handlers
+	necessary for logging in to a server. After a successful connect()
+	the connection is passed to a worker thread, but the login
+	handshake incoming data handlers for the login phase can be found
+	in uplink.c.
+
+incoming.c
+	Contains the incoming_handler() function which is called
+	by the worker thread to process incoming APRS-IS data
+	line by line. Decodes basic IS packet format and calls
+	the Q construct processor and the APRS decoder.
+
+outgoing.c
+	Checks which outgoing packets should be sent to each client by
+	calling filter functions, and does the actual sending.
+
+filter.c
+	APRS-IS filter used by the outgoing packet processing.
+	It tells if the packet should be sent out on given client socket,
+	depending on the user's preferences.
+
+parse_aprs.c
+	A simple APRS parser for aprsc. Translated from Ham::APRS::FAP
+	perl module (by OH2KKU). Only needs to get lat/lng out of the
+	packet, and classify the type of the packet, other features would
+	be unnecessary in this application, and slow down the parser.
+	Called by incoming.c.
+
+parse_qc.c
+	Parses and possibly generates a new Q construct, or modifies
+	an existing one. Called by incoming.c.
+
+messaging.c
+	Contains utility functions for processing received APRS text
+	messages and generating new messages.
+
+clientlist.c
+	Clientlist contains a list of connected clients, along with their
+	verification status. It is updated when clients connect or disconnect,
+	and lookups are made more often by the Q construct algorithm.
+	
+	This list is maintained so that the login handler can find duplicate
+	verified logins, and that the Q construct handler can lookup
+	verified logins without locking and walking the other worker thread's
+	client list.
+
+client_heard.c
+	The client's heard list contains a list of stations heard by
+	a given client. It's used for message routing by the
+	message destination callsign.
+	
+	The module also maintains a list of callsigns which have transmitted
+	messages to a given client. The list is used to pass courtesy
+	positions to the client.
+	
+	The heard list is only called by the worker thread operating
+	on that client socket, so it shouldn't need any locking at all.
+
+config.c
+	Code to read (and reread) configuration using the services
+	provided by cfgfile.c. Validates configuration and takes
+	it into use. Contains global configuration variables.
+
+http.c
+	HTTP server implemented using libevent2. Runs in a single thread,
+	event-driven, provides access to the status page and HTTP
+	position uploads.
+
+--- Libraries ---
+
+The following source code files have rather clean APIs, are not specific to
+to the aprsc project, and are usablein other projects as such.
+
+netlib.c
+	A few network socket utility functions.
+
+xpoll.c
+	A wrapper for different select/poll/epoll implementations.
+	Currently only contains support for poll(). Should maybe
+	support select() for ancient systems. The following platform-
+	specific APIs would provide improved performance: epoll()
+	on Linux 2.6, kqueue on new *BSD, /dev/poll on new Solaris
+	releases. Written for the aprsc project by Heikki Hannikainen,
+	OH7LZB.
+
+passcode.c
+	aprs_passcode() function to calculate the checksum used as the
+	"password" int the APRS-IS login command. Released to the
+	open source APRS community by Steve Dimse, K4HG, on April 11,
+	2000. Obtained from the aprsd sources, which are GPL.
+
+acl.c
+	Access list code for limiting server access based on IP address.
+
+hlog.c
+	A logging library written by Heikki Hannikainen, OH7LZB,
+	for some old project. Supports logging to syslog, stderr,
+	and a log file, with configurable log levels and rotation
+	(reopen on SIGHUP).
+	
+hmalloc.c
+	malloc/realloc/free/strdup wrappers with error checking.
+	Please use these in this project. Written by Hessu, OH7LZB.
+
+cfgfile.c
+	A configuration file parser written by Tomi Manninen, OH2BNS,
+	originally for the node(1) program in the ax25-utils package.
+
+keyhash.c
+	Various attempts at keyhashing.
+	Contains algorithms:
+	  - FNV-1a
+	  - CRC32
+	Currently using FNV-1a
+
+rwlock.c
+	A schoolbook pthread rwlock implementation for systems
+	lacking one (Solaris 2.6 to name one).
+	From the book "Programming with POSIX Threads", by
+	David R. Butenhof. Appears in modified and GPL'ed form in at
+	least the Bacula sources.
+
+inet_ntop.c, inet_pton.c, getnameinfo.c, gai_strerror.c:
+	Backup instances of IPv4/IPv6 agnostic resolver library just
+	in case the operating system does not have it.
+	(From ZMailer by Matti Aarnio, OH2MQK)
