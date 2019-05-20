@@ -1,13 +1,16 @@
 Source: aprsc
 Section: hamradio
-Priority: extra
-Maintainer: Heikki Hannikainen <hessu@hes.iki.fi>
-Build-Depends: debhelper (>= 4), fakeroot (>= 1), lsb-release (>= 3), lsb-base (>= 3)
-Standards-Version: 3.7.2
+Priority: optional
+Maintainer: Jeff Shykula <jeff@zondectium.net>
+Build-Depends: debhelper (>= 10), autotools-dev, fakeroot (>= 1), lsb-release (>= 3), lsb-base (>= 3), libevent-2.1-6, libevent-dev
+Standards-Version: 4.1.2
+Homepage: https://www.eoss.org
+#Vcs-Git: https://anonscm.debian.org/git/collab-maint/aprsc.git
+#Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/aprsc.git
 
 Package: aprsc
 Architecture: any
-Depends: ${shlibs:Depends}, adduser (>= 2), libwww-perl (>= 5), libjson-xs-perl (>= 2), libcap2-bin (>= 2)
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser (>= 2), libwww-perl (>= 5), libjson-xs-perl (>= 2), libcap2-bin (>= 2), libevent-2.1-6
 Description: APRS-IS server
  aprsc is an APRS-IS server intended to be used on core and Tier2 servers.
  .
