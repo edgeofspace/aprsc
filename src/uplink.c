@@ -279,8 +279,13 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 		c->app_version[sizeof(c->app_version)-1] = 0;
 	}
 
-	// TODO: The uplink login command here could maybe be improved to send a filter command.
-	len = sprintf(buf, "user %s pass %s vers %s\r\n", serverid, passcode, verstr_aprsis);
+	// if there is a server command, include it.  otherwise use the first form to prevent an extra space at the end of the line
+	if(c->filter_s[0]=='\0'){
+		len = sprintf(buf, "user %s pass %s vers %s\r\n", serverid, passcode, verstr_aprsis);
+	}else{
+		len = sprintf(buf, "user %s pass %s vers %s %s\r\n", serverid, passcode, verstr_aprsis, c->filter_s);
+	}
+
 
 	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_rem, len-2, buf, len);
 
@@ -573,6 +578,9 @@ connerr:
 	strncpy(c->username, l->name, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 	c->username_len = strlen(c->username);
+	if(l->servercmd != NULL){
+		strncpy(c->filter_s, l->servercmd, sizeof(c->filter_s));  // overlaoding the filter_s if it's an uplink to be the server command to send
+	}
 
 	/* These peer/sock name calls can not fail -- or the socket closed
 	   on us in which case it gets abandoned a bit further below. */

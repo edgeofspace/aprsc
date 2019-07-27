@@ -19,3 +19,10 @@
 aprsc_*.changes
 aprsc_*.deb
 
+# build products in the test directory
+tests/web/*
+tests/logs/*
+tests/data/*
+
+#Crash files
+core

@@ -789,9 +789,22 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 				return -2;
 			}
 		} else {
-			hlog(LOG_ERR, "Uplink %s: Invalid parameter '%s'", argv[1], argv[i]);
-			free_uplink_config(&l);
-			return -2;
+			/* 
+			 * we're grabbing any leftover parameters and reassembling them into 
+			 * a server command.  This means that they don't have to be quoted
+			 */
+			char assy_buf[1025];  		/* create a temporary buffer and re-assemble the server command */
+			int offset = 0;
+			for(;i < argc; i++){
+				strncat(assy_buf,argv[i],sizeof(assy_buf)-offset);
+				if((offset=strlen(assy_buf)) >= sizeof(assy_buf)){
+					free_uplink_config(&l);
+					return -3;
+				}
+				assy_buf[offset]=' ';
+				assy_buf[offset+1]='\0';
+			}
+			l->servercmd = hstrdup(assy_buf);
 		}
 	}
 

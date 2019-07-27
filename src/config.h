@@ -177,6 +177,7 @@ struct uplink_config_t {
 	const char *proto;
 	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
 	const char *port;
+	const char *servercmd;		/* command to send to the upstream server - probably things like "filter r/33.25/-96.5/50" */
 	
 	const char *keyfile;			/* SSL client key file */
 	const char *certfile;			/* SSL client certificate file */

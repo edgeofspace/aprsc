@@ -218,12 +218,13 @@ IPv4 and IPv6:
 
 ### Uplink configuration ###
 
-Uplink name type tcp address port
+Uplink name type tcp address port [server command]
 
  *  name: a name of the server or service you're connecting to
  *  type: one of:
     - full - send a full feed to upstream
     - ro   - read-only, do not transmit anything upstream
+  * server command: an optional command to send to the server
 
 If you wish to specify multiple alternative servers, use multiple Uplink
 lines, one for each server. aprsc will automatically maintain a connection
@@ -236,6 +237,10 @@ the first one become unavailable.
 Here's a good configuration for connecting to the APRS-IS core:
 
     Uplink "Core rotate" full  tcp  rotate.aprs.net 10152
+
+The server command argument is typically used when connecting to a server filter port.
+in that case a command might look like
+    Uplink "Core Filter" ro tcp rotate.aprs.net 14580 filter r/33.25/-96.5/50
 
 
 ### Binding source address when connecting upstream (optional) ###
