@@ -57,6 +57,7 @@ static struct listen_t *listen_list;
 
 int accept_shutting_down;
 int accept_reconfiguring;
+time_t accept_reconfigure_after_tick = 0;
 
 /* pseudoworker + pseudoclient for incoming UDP packets */
 struct worker_t *udp_worker = NULL;
@@ -296,10 +297,10 @@ static int open_listener(struct listen_config_t *lc)
 	
 	if (lc->ai->ai_socktype == SOCK_DGRAM &&
 	    lc->ai->ai_protocol == IPPROTO_UDP) {
-		/* UDP listenting is not quite same as TCP listening.. */
+		/* UDP listening is not quite same as TCP listening.. */
 		i = open_udp_listener(l, lc->ai);
 	} else if (lc->ai->ai_socktype == SOCK_STREAM && lc->ai->ai_protocol == IPPROTO_TCP) {
-		/* TCP listenting... */
+		/* TCP listening... */
 		i = open_tcp_listener(l, lc->ai, "TCP");
 #ifdef USE_SCTP
 	} else if (lc->ai->ai_socktype == SOCK_STREAM &&
@@ -317,6 +318,11 @@ static int open_listener(struct listen_config_t *lc)
 	if (i < 0) {
 		hlog(LOG_DEBUG, "... failed");
 		listener_free(l);
+		/* trigger reconfiguration after 30 seconds; probably an IP
+		 * address that we tried to bind was not yet configured and
+		 * it'll appear later in the boot process
+		 */
+		accept_reconfigure_after_tick = tick + 30;
 		return -1;
 	}
 	
@@ -1447,6 +1453,7 @@ void accept_thread(void *asdf)
 			acceptpl = hmalloc(poll_n * sizeof(*acceptpl));
 			
 			n = 0;
+			int has_filtered_listeners_now = 0;
 			for (l = listen_list; (l); l = l->next) {
 				/* The accept thread does not poll() UDP sockets for core peers.
 				 * Worker 0 takes care of that, and processes the incoming packets.
@@ -1464,6 +1471,9 @@ void accept_thread(void *asdf)
 					fd = l->fd;
 				}
 				
+				if ((l->filter_s) || (l->client_flags & CLFLAGS_USERFILTEROK))
+					has_filtered_listeners_now = 1;
+				
 				hlog(LOG_DEBUG, "... %d: fd %d (%s)", n, fd, l->addr_s);
 				acceptpfd[n].fd = fd;
 				acceptpfd[n].events = POLLIN|POLLPRI|POLLERR|POLLHUP;
@@ -1471,6 +1481,9 @@ void accept_thread(void *asdf)
 				n++;
 			}
 			hlog(LOG_INFO, "Accept thread ready.");
+			have_filtered_listeners = has_filtered_listeners_now;
+			if (!have_filtered_listeners)
+				hlog(LOG_INFO, "Disabled historydb, listeners do not have filtering enabled.");
 			
 			/* stop the dupechecking and uplink threads while adjusting
 			 * the amount of workers... they walk the worker list, and
@@ -1494,6 +1507,10 @@ void accept_thread(void *asdf)
 			/* accept liveupgrade clients */
 			if (liveupgrade_status)
 				accept_liveupgrade_accept();
+		} else if (accept_reconfigure_after_tick != 0 && accept_reconfigure_after_tick <= tick) {
+			hlog(LOG_INFO, "Trying to reconfigure listeners due to a previous failure");
+			accept_reconfiguring = 1;
+			accept_reconfigure_after_tick = 0;
 		}
 		
 		/* check for new connections */

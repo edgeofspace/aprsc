@@ -1,0 +1,37 @@
+[Unit]
+Description="APRS-IS server #%i"
+After=network-online.target aprsc-chroot.service
+Wants=network-online.target
+Requires=aprsc-chroot.service
+Documentation=http://he.fi/aprsc/, man:aprsc(8)
+
+[Service]
+Type=simple
+ExecStart=/opt/aprsc/sbin/aprsc -n aprsc-%i -u aprsc -t /opt/aprsc -e info -o file -r logs -c etc/aprsc-%i.conf
+ExecReload=/bin/kill -USR1 $MAINPID
+PIDFile=/opt/aprsc/logs/aprsc-%i.pid
+TimeoutStopSec=5
+RestartSec=5
+Restart=always
+User=root
+Group=root
+LimitNOFILE=65535
+#PrivateDevices=yes
+#ProtectHome=yes
+#ReadOnlyDirectories=/
+#ReadWriteDirectories=-/var/lib/aprsc
+
+#NoNewPrivileges=true
+#CapabilityBoundingSet=CAP_SETGID CAP_SETUID CAP_SYS_RESOURCE
+MemoryDenyWriteExecute=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ProtectSystem=true
+#ReadWriteDirectories=-/etc/aprsc
+
+[Install]
+WantedBy=multi-user.target

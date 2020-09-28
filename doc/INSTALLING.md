@@ -4,9 +4,9 @@ Installing aprsc
 
 aprsc is "officially" "supported" on the following platforms:
 
-* Debian stable (8.0, "jessie"): i386, x86_64
-* Debian oldstable (7.0, "wheezy"): i386, x86_64, armhf Raspberry Pi (armv6l)
-* Ubuntu LTS (14.04, 16.04): i386 and x86_64
+* Debian stable (10.0, "buster"): i386, x86_64
+* Debian oldstable (9.0, "stretch"): i386, x86_64
+* Ubuntu LTS (14.04, 16.04, 18.04, 20.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
 * CentOS 7: x86_64
 
@@ -50,10 +50,12 @@ You'll need to figure out the codename of your distribution.  The command
 "lsb_release -c" should provide the codename.  Here's a list of distribution
 versions and their codenames:
 
+* Ubuntu 20.04 LTS: focal
+* Ubuntu 18.04 LTS: bionic
 * Ubuntu 16.04 LTS: xenial
-* Ubuntu 14.04 LTS: trusty
+* Debian 10.0: buster
+* Debian 9.0: stretch
 * Debian 8.0: jessie
-* Debian 7.0: wheezy
 
 Other versions are currently not supported.
 
@@ -95,6 +97,33 @@ restart aprsc for you, if possible.
 Before starting aprsc edit the configuration file, which can be found in
 /opt/aprsc/etc/aprsc.conf.  Please see the [CONFIGURATION](CONFIGURATION.html)
 document for instructions.
+
+If your distribution has systemd (try 'systemctl' to find out if you do),
+proceed with the systemd instructions.  If not, proceed with the
+old-fashioned non-systemd instructions.
+
+Startup with systemd
+-----------------------
+
+Enable the service:
+
+    sudo systemctl enable aprsc
+
+To start it up:
+
+    sudo systemctl start aprsc
+
+To shut it down:
+
+    sudo systemctl stop aprsc
+
+To perform a restart:
+
+    sudo systemctl restart aprsc
+
+
+Startup the old-fashioned way
+--------------------------------
 
 To enable startup, edit /etc/default/aprsc and change STARTAPRSC="no" to
 "yes". There should not be any need to touch the other options at this time.
