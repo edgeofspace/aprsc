@@ -18,6 +18,6 @@
  *	Thanks!
  */
 
-#define VERSION_BRANCH "-EOSS-1"
+#define VERSION_BRANCH "EOSS-1"
 
 #endif
